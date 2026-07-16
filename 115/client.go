@@ -19,14 +19,30 @@ import (
 	"golang.org/x/time/rate"
 )
 
+const (
+	// DefaultFilesCacheTTL is the default directory listing cache lifetime.
+	// A long TTL (previously 2 minutes) causes WebDAV clients to miss files
+	// newly added on 115 until the cache expires, often requiring many refreshes.
+	DefaultFilesCacheTTL = 5 * time.Second
+	// DefaultURLCacheTTL is the default download URL cache lifetime.
+	DefaultURLCacheTTL = 2 * time.Minute
+)
+
 type DriveClient struct {
-	HttpClient   *resty.Client
-	cache        gcache.Cache
-	reserveProxy *httputil.ReverseProxy
-	limiter      *rate.Limiter
+	HttpClient    *resty.Client
+	cache         gcache.Cache
+	reserveProxy  *httputil.ReverseProxy
+	limiter       *rate.Limiter
+	filesCacheTTL time.Duration
+	urlCacheTTL   time.Duration
 }
 
-func MustNew115DriveClient(uid string, cid string, seid string, kid string) *DriveClient {
+// MustNew115DriveClient creates a logged-in 115 drive client.
+// filesCacheTTL controls how long directory listings are cached:
+//   - < 0: use DefaultFilesCacheTTL (5s)
+//   - 0: disable directory listing cache (always fetch from 115)
+//   - > 0: cache for the given duration
+func MustNew115DriveClient(uid string, cid string, seid string, kid string, filesCacheTTL time.Duration) *DriveClient {
 	httpClient := resty.New().SetCookie(&http.Cookie{
 		Name:     "UID",
 		Value:    uid,
@@ -53,10 +69,16 @@ func MustNew115DriveClient(uid string, cid string, seid string, kid string) *Dri
 		HttpOnly: true,
 	}).SetHeader("User-Agent", UserAgent)
 
+	if filesCacheTTL < 0 {
+		filesCacheTTL = DefaultFilesCacheTTL
+	}
+
 	client := &DriveClient{
-		HttpClient: httpClient,
-		cache:      gcache.New(10000).LFU().Build(),
-		limiter:    rate.NewLimiter(5, 1),
+		HttpClient:    httpClient,
+		cache:         gcache.New(10000).LFU().Build(),
+		limiter:       rate.NewLimiter(5, 1),
+		filesCacheTTL: filesCacheTTL,
+		urlCacheTTL:   DefaultURLCacheTTL,
 		reserveProxy: &httputil.ReverseProxy{
 			Transport: httpClient.GetClient().Transport,
 			Director: func(req *http.Request) {
@@ -72,7 +94,7 @@ func MustNew115DriveClient(uid string, cid string, seid string, kid string) *Dri
 	if err != nil || userID <= 0 {
 		logrus.WithError(err).Panicf("115 drive login fail")
 	}
-	logrus.Infof("115 drive login succ, user_id: %d", userID)
+	logrus.Infof("115 drive login succ, user_id: %d, files_cache_ttl: %v", userID, filesCacheTTL)
 
 	return client
 }
@@ -80,8 +102,10 @@ func MustNew115DriveClient(uid string, cid string, seid string, kid string) *Dri
 func (c *DriveClient) GetFiles(dir string) ([]drive.File, error) {
 	dir = slashClean(dir)
 	cacheKey := fmt.Sprintf("files:%s", dir)
-	if value, err := c.cache.Get(cacheKey); err == nil {
-		return value.([]drive.File), nil
+	if c.filesCacheTTL > 0 {
+		if value, err := c.cache.Get(cacheKey); err == nil {
+			return value.([]drive.File), nil
+		}
 	}
 
 	c.limiter.Wait(context.Background())
@@ -109,8 +133,10 @@ func (c *DriveClient) GetFiles(dir string) ([]drive.File, error) {
 			break
 		}
 	}
-	if err := c.cache.SetWithExpire(cacheKey, files, time.Minute*2); err != nil {
-		logrus.WithError(err).Errorf("call c.cache.SetWithExpire fail, dir: %s", dir)
+	if c.filesCacheTTL > 0 {
+		if err := c.cache.SetWithExpire(cacheKey, files, c.filesCacheTTL); err != nil {
+			logrus.WithError(err).Errorf("call c.cache.SetWithExpire fail, dir: %s", dir)
+		}
 	}
 
 	return files, nil
@@ -164,7 +190,7 @@ func (c *DriveClient) GetFileURL(file drive.File) (string, error) {
 		return "", err
 	}
 
-	if err := c.cache.SetWithExpire(cacheKey, info.URL.URL, time.Minute*2); err != nil {
+	if err := c.cache.SetWithExpire(cacheKey, info.URL.URL, c.urlCacheTTL); err != nil {
 		logrus.WithError(err).Errorf("call c.cache.SetWithExpire fail, url: %s", info.URL.URL)
 	}
 

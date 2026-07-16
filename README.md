@@ -64,6 +64,10 @@ docker run -d \
     115 网盘 Cookie，KID
 --config
     从文件中读取配置，参考 config.json.example
+--files-cache-ttl
+    目录列表缓存时间（秒），默认 5；设为 0 可关闭缓存。
+    在 115 端新增文件后，WebDAV 客户端最长等待该时间后即可刷新看到新文件。
+    配置文件对应字段为 files_cache_ttl
 ```
 
 ## 功能支持
