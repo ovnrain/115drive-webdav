@@ -7,5 +7,5 @@
 	"port": 8081,
 	"user": "user",
 	"pwd": "123456",
-	"files_cache_ttl": 5
+	"files_cache_ttl": 120
 }

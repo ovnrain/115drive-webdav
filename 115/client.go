@@ -21,9 +21,7 @@ import (
 
 const (
 	// DefaultFilesCacheTTL is the default directory listing cache lifetime.
-	// A long TTL (previously 2 minutes) causes WebDAV clients to miss files
-	// newly added on 115 until the cache expires, often requiring many refreshes.
-	DefaultFilesCacheTTL = 5 * time.Second
+	DefaultFilesCacheTTL = 2 * time.Minute
 	// DefaultURLCacheTTL is the default download URL cache lifetime.
 	DefaultURLCacheTTL = 2 * time.Minute
 )
@@ -39,7 +37,7 @@ type DriveClient struct {
 
 // MustNew115DriveClient creates a logged-in 115 drive client.
 // filesCacheTTL controls how long directory listings are cached:
-//   - < 0: use DefaultFilesCacheTTL (5s)
+//   - < 0: use DefaultFilesCacheTTL (2 minutes)
 //   - 0: disable directory listing cache (always fetch from 115)
 //   - > 0: cache for the given duration
 func MustNew115DriveClient(uid string, cid string, seid string, kid string, filesCacheTTL time.Duration) *DriveClient {

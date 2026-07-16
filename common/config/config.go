@@ -10,8 +10,8 @@ import (
 )
 
 const (
-	// DefaultFilesCacheTTLSec is the default directory listing cache TTL in seconds.
-	DefaultFilesCacheTTLSec = 5
+	// DefaultFilesCacheTTLSec is the default directory listing cache TTL in seconds (2 minutes).
+	DefaultFilesCacheTTLSec = 120
 )
 
 type config struct {
@@ -40,7 +40,7 @@ var (
 	cliPort          = flag.Int("port", 8080, "webdav server port")
 	cliUser          = flag.String("user", "user", "webdav auth username")
 	cliPassword      = flag.String("pwd", "123456", "webdav auth password")
-	cliFilesCacheTTL = flag.Int("files-cache-ttl", DefaultFilesCacheTTLSec, "directory listing cache TTL in seconds; 0 disables cache (default 5)")
+	cliFilesCacheTTL = flag.Int("files-cache-ttl", DefaultFilesCacheTTLSec, "directory listing cache TTL in seconds; 0 disables cache (default 120)")
 )
 
 func init() {
@@ -62,7 +62,7 @@ func init() {
 }
 
 // FilesCacheTTLDuration returns the directory listing cache duration.
-// Negative values fall back to the default (5s).
+// Negative values fall back to the default (2 minutes).
 func (c *config) FilesCacheTTLDuration() time.Duration {
 	if c.FilesCacheTTL < 0 {
 		return time.Duration(DefaultFilesCacheTTLSec) * time.Second
